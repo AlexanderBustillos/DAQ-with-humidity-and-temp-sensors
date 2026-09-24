@@ -1,0 +1,92 @@
+%% SHT31 Serial Reader
+close all;
+clear;
+clc;
+
+% Serial Settings
+port = "/dev/cu.usbmodem11401";
+baudRate = 9600;
+
+% Create serial connection
+arduino = serialport(port, baudRate);
+
+% Clear any old data
+flush(arduino);
+
+% Give the Arduino time to start
+pause(2);
+
+% Create Figure
+fig = figure;
+
+% Temperature plot
+axTemp = subplot(2,1,1);
+tempPlot = plot(axTemp, NaN, NaN, '-o', 'MarkerSize', 4);
+grid on;
+xlabel("Time (s)");
+ylabel("Temperature (°C)");
+title("SHT31 Temperature");
+
+% Humidity plot
+axHumidity = subplot(2,1,2);
+humidityPlot = plot(axHumidity, NaN, NaN, '-o', 'MarkerSize', 4);
+grid on;
+xlabel("Time (s)");
+ylabel("Humidity (%)");
+title("SHT31 Humidity");
+
+% Enable data tips with custom text 
+dcm = datacursormode(fig);
+dcm.Enable = 'on';
+dcm.SnapToDataVertex = 'on';
+dcm.UpdateFcn = @dataTipText;
+
+% Data buffers (regular line objects, not animatedline, so data tips work)
+timeData = [];
+tempData = [];
+humidityData = [];
+
+% Start Timer
+startTime = datetime("now");
+disp("Reading SHT31...");
+
+% Read Serial Data
+while true
+    % Read one line from Arduino
+    data = readline(arduino);
+
+    % Convert from string to numbers
+    values = sscanf(data, "%f,%f");
+    temperature = values(1);
+    humidity = values(2);
+
+    % Calculate elapsed time
+    elapsedTime = seconds(datetime("now") - startTime);
+
+    % Append new data
+    timeData(end+1) = elapsedTime;
+    tempData(end+1) = temperature;
+    humidityData(end+1) = humidity;
+
+    % Update plots
+    set(tempPlot, 'XData', timeData, 'YData', tempData);
+    set(humidityPlot, 'XData', timeData, 'YData', humidityData);
+
+    drawnow limitrate;
+end
+
+% Local function: formats what the data tip displays
+function txt = dataTipText(~, event)
+    pos = event.Position;
+    t = pos(1);
+    v = pos(2);
+
+    ax = ancestor(event.Target, 'axes');
+    axTitle = ax.Title.String;
+
+    if contains(axTitle, "Temperature")
+        txt = {sprintf('Time: %.2f s', t), sprintf('Temp: %.2f °C', v)};
+    else
+        txt = {sprintf('Time: %.2f s', t), sprintf('Humidity: %.2f %%', v)};
+    end
+end
