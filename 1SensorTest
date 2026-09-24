@@ -26,12 +26,12 @@ void loop() {
 
   // Sensor 1
   if (!isnan(t1)) {
-    Serial.print("\n");
     Serial.print(t1);
     Serial.print(",");
   }
   if (!isnan(h1)) {
     Serial.print(h1);
+    Serial.print("\n");
   }
-  delay(1000);
+
 }
