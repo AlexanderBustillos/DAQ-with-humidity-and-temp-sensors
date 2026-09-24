@@ -1,0 +1,67 @@
+%% SHT31 Serial Reader
+close all;
+clear;
+clc;
+
+% Serial Settings
+port = "/dev/cu.usbmodem11401";
+baudRate = 9600;
+
+% Create serial connection
+arduino = serialport(port, baudRate);
+
+% Clear any old data
+flush(arduino);
+
+% Give the Arduino time to start
+pause(2);
+
+% Create Figure
+figure;
+
+% Temperature plot
+subplot(2,1,1);
+tempPlot = animatedline;
+grid on;
+xlabel("Time (s)");
+ylabel("Temperature (°C)");
+title("SHT31 Temperature");
+
+% Humidity plot
+subplot(2,1,2);
+humidityPlot = animatedline;
+grid on;
+xlabel("Time (s)");
+ylabel("Humidity (%)");
+title("SHT31 Humidity");
+
+% Start Timer
+startTime = datetime("now");
+
+disp("Reading SHT31...");
+
+% Read Serial Data
+while true
+
+    % Read one line from Arduino
+    data = readline(arduino);
+
+    % Convert from string to numbers
+    values = sscanf(data, "%f,%f");
+
+
+    temperature = values(1);
+    humidity = values(2);
+
+    % Calculate elapsed time
+    elapsedTime = seconds(datetime("now") - startTime);
+
+    % Add data to plots
+    addpoints(tempPlot, elapsedTime, temperature);
+    addpoints(humidityPlot, elapsedTime, humidity);
+
+    % Update plots
+    drawnow limitrate;
+
+        
+end
