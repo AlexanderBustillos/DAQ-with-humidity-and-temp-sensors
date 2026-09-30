@@ -193,7 +193,9 @@ humidity5 = NaN;
 temperature6 = NaN;
 humidity6 = NaN;
 
+%% Reading timer
 
+lastReadingTime = -1;
 %% Main loop
 
 while isvalid(fig)
@@ -211,12 +213,6 @@ while isvalid(fig)
             disp("Mass balance: " + data4);
 
             % Find the number in the line
-            %
-            % Example input:
-            % +   0.000 g
-            %
-            % This finds:
-            % +   0.000
 
             numberString = regexp(data4, ...
                 '[-+]?\s*\d+\.\d+', 'match', 'once');
@@ -299,16 +295,21 @@ while isvalid(fig)
         datetime("now") - startTime);
 
 
-    %% Store data
+   %% Store data
 
-    % Only store a measurement once all three devices
-    % have provided at least one valid measurement.
+% Only store a measurement once all three devices
+% have provided at least one valid measurement.
 
-    if ~isnan(Mass4) && ...
-       ~isnan(temperature5) && ...
-       ~isnan(humidity5) && ...
-       ~isnan(temperature6) && ...
-       ~isnan(humidity6)
+if ~isnan(Mass4) && ...
+   ~isnan(temperature5) && ...
+   ~isnan(humidity5) && ...
+   ~isnan(temperature6) && ...
+   ~isnan(humidity6)
+
+    % Only save one reading every 1 second
+    if elapsedTime - lastReadingTime >= 1
+
+        lastReadingTime = elapsedTime;
 
         timeData(end+1) = elapsedTime;
 
@@ -323,27 +324,22 @@ while isvalid(fig)
 
         %% Plots
 
-        % Mass
         set(massPlot4, ...
             'XData', timeData, ...
             'YData', MassData4);
 
-        % Temperature 5
         set(tempPlot5, ...
             'XData', timeData, ...
             'YData', tempData5);
 
-        % Humidity 5
         set(humidityPlot5, ...
             'XData', timeData, ...
             'YData', humidityData5);
 
-        % Temperature 6
         set(tempPlot6, ...
             'XData', timeData, ...
             'YData', tempData6);
 
-        % Humidity 6
         set(humidityPlot6, ...
             'XData', timeData, ...
             'YData', humidityData6);
@@ -381,6 +377,8 @@ while isvalid(fig)
         writetable(massTable, massFile);
 
     end
+
+end
 
 
     %% Figure
