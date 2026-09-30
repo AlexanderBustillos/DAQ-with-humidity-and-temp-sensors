@@ -1,0 +1,262 @@
+%% SHT31 + Mass Balance Serial Reader
+close all;
+clear;
+clc;
+
+%% Serial
+
+% COM4 = Mass balance
+% COM5 = Room temperature/humidity sensor
+% COM6 = Inside chamber temperature/humidity sensor
+
+
+port5 = "/COM5";
+
+baudRate = 9600;
+
+% Test number
+% Change this for each new experiment
+testNumber = 1;
+
+% Folder where CSV files will be saved
+directory_samples = '/Users/alex/Desktop/samples/';
+
+
+
+%% Serial connecctions
+
+disp("Connecting to serial devices...");
+
+
+arduino5 = serialport(port5, baudRate);
+
+
+% Clear any old data
+
+flush(arduino5);
+
+
+% Give Arduinos/sensors time to start
+pause(2);
+
+disp("Serial connections established.");
+
+
+%% CSV file names
+
+tempFile = fullfile(directory_samples, ...
+    sprintf('Temp%d.csv', testNumber));
+
+% Check if files already exist
+if exist(tempFile, 'file')
+    warning("Temperature file already exists: %s", tempFile);
+end
+
+
+
+%% Data tables
+
+% Temperature/humidity data
+tempTable = table('Size', [0 3],'VariableTypes', {'double','double','double'}, ...
+    'VariableNames', ...
+    {'Time_s','Temp5_C','Humidity5_percent'});
+
+
+
+%% Figures
+
+fig = figure('Name', 'SHT31', ...
+             'NumberTitle', 'off');
+
+% Temp sensor 5
+axTemp5 = subplot(2,1,1);
+
+tempPlot5 = plot(axTemp5, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+
+grid(axTemp5, 'on');
+
+xlabel(axTemp5, "Time (s)");
+ylabel(axTemp5, "Temperature (°C)");
+title(axTemp5, "SHT31 Temperature - COM5");
+
+
+% Humidity sensor 5
+axHumidity5 = subplot(2,1,2);
+
+humidityPlot5 = plot(axHumidity5, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+
+grid(axHumidity5, 'on');
+
+xlabel(axHumidity5, "Time (s)");
+ylabel(axHumidity5, "Humidity (%)");
+title(axHumidity5, "SHT31 Humidity - COM5");
+
+
+
+
+
+%% Data tips
+
+dcm = datacursormode(fig);
+
+dcm.Enable = 'on';
+dcm.SnapToDataVertex = 'on';
+dcm.UpdateFcn = @dataTipText;
+
+
+%% Buffers
+
+timeData = [];
+
+
+
+tempData5 = [];
+humidityData5 = [];
+
+
+
+%% Timmer
+
+startTime = datetime("now");
+
+
+
+%% Main loop
+
+while isvalid(fig)
+
+    
+
+
+    %% Sensor 5
+
+    try
+        data5 = readline(arduino5);
+
+        values5 = sscanf(data5, "%f,%f");
+
+        if length(values5) < 2
+            continue;
+        end
+
+        temperature5 = values5(1);
+        humidity5 = values5(2);
+
+    catch
+        warning("Could not read COM5.");
+        continue;
+    end
+
+
+
+    %% Time
+
+    elapsedTime = seconds(datetime("now") - startTime);
+
+
+    %% Store data
+
+    timeData(end+1) = elapsedTime;
+
+
+    tempData5(end+1) = temperature5;
+    humidityData5(end+1) = humidity5;
+
+
+
+    %% Plots
+
+   
+    % Temperature 5
+    set(tempPlot5, ...
+        'XData', timeData, ...
+        'YData', tempData5);
+
+    % Humidity 5
+    set(humidityPlot5, ...
+        'XData', timeData, ...
+        'YData', humidityData5);
+
+    
+
+
+    %% Save temp data
+
+    newTempRow = table( ...
+        elapsedTime, ...
+        temperature5, ...
+        humidity5, ...
+        'VariableNames', ...
+        {'Time_s','Temp5_C','Humidity5_percent'});
+
+    tempTable = [tempTable; newTempRow];
+
+
+
+
+    %% CSV updates
+
+    writetable(tempTable, tempFile);
+
+
+    %% Figure
+
+    drawnow limitrate;
+
+end
+
+
+
+
+% Make sure final data is saved
+writetable(tempTable, tempFile);
+
+% Clear serial connections
+clear arduino5;
+
+
+
+%% data functon
+
+function txt = dataTipText(~, event)
+
+    % Get point location
+    pos = event.Position;
+
+    t = pos(1);
+    v = pos(2);
+
+    % Find which axis the point belongs to
+    ax = ancestor(event.Target, 'axes');
+
+    % Get axis title
+    axTitle = ax.Title.String;
+
+    % Determine what type of data is being displayed
+
+    if contains(axTitle, "Temperature")
+
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Temperature: %.2f °C', v) ...
+            };
+
+    elseif contains(axTitle, "Humidity")
+
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Humidity: %.2f %%', v) ...
+            };
+
+    else
+
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Value: %.2f', v) ...
+            };
+
+    end
+
+end
