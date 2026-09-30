@@ -40,6 +40,11 @@ flush(arduino6);
 % Give Arduinos/sensors time to start
 pause(2);
 
+% Clear any startup data
+flush(MB4);
+flush(arduino5);
+flush(arduino6);
+
 disp("Serial connections established.");
 
 
@@ -172,6 +177,19 @@ humidityData6 = [];
 startTime = datetime("now");
 
 
+%% Last measurements
+
+% These hold the most recent valid measurement
+% from each sensor.
+
+Mass4 = NaN;
+
+temperature5 = NaN;
+humidity5 = NaN;
+
+temperature6 = NaN;
+humidity6 = NaN;
+
 
 %% Main loop
 
@@ -179,60 +197,78 @@ while isvalid(fig)
 
     %% Mass balance
 
-    try
-        data4 = readline(MB4);
+    if MB4.NumBytesAvailable > 0
 
-        values4 = sscanf(data4, "%f");
+        try
 
-        if isempty(values4)
-            continue;
+            data4 = readline(MB4);
+
+            values4 = sscanf(data4, "%f");
+
+            if ~isempty(values4)
+
+                Mass4 = values4(1);
+
+            end
+
+        catch
+
+            warning("Could not read mass balance.");
+
         end
 
-        Mass4 = values4(1);
-
-    catch
-        warning("Could not read mass balance.");
-        continue;
     end
 
 
     %% Sensor 5
 
-    try
-        data5 = readline(arduino5);
+    if arduino5.NumBytesAvailable > 0
 
-        values5 = sscanf(data5, "%f,%f");
+        try
 
-        if length(values5) < 2
-            continue;
+            data5 = readline(arduino5);
+
+            values5 = sscanf(data5, "%f,%f");
+
+            if length(values5) >= 2
+
+                temperature5 = values5(1);
+                humidity5 = values5(2);
+
+            end
+
+        catch
+
+            warning("Could not read COM5.");
+
         end
 
-        temperature5 = values5(1);
-        humidity5 = values5(2);
-
-    catch
-        warning("Could not read COM5.");
-        continue;
     end
 
 
     %% Sensor 6
 
-    try
-        data6 = readline(arduino6);
+    if arduino6.NumBytesAvailable > 0
 
-        values6 = sscanf(data6, "%f,%f");
+        try
 
-        if length(values6) < 2
-            continue;
+            data6 = readline(arduino6);
+
+            values6 = sscanf(data6, "%f,%f");
+
+            if length(values6) >= 2
+
+                temperature6 = values6(1);
+                humidity6 = values6(2);
+
+            end
+
+        catch
+
+            warning("Could not read COM6.");
+
         end
 
-        temperature6 = values6(1);
-        humidity6 = values6(2);
-
-    catch
-        warning("Could not read COM6.");
-        continue;
     end
 
 
@@ -243,85 +279,99 @@ while isvalid(fig)
 
     %% Store data
 
-    timeData(end+1) = elapsedTime;
+    % Only store a measurement once all three devices
+    % have provided at least one valid measurement.
 
-    MassData4(end+1) = Mass4;
+    if ~isnan(Mass4) && ...
+       ~isnan(temperature5) && ...
+       ~isnan(humidity5) && ...
+       ~isnan(temperature6) && ...
+       ~isnan(humidity6)
 
-    tempData5(end+1) = temperature5;
-    humidityData5(end+1) = humidity5;
+        timeData(end+1) = elapsedTime;
 
-    tempData6(end+1) = temperature6;
-    humidityData6(end+1) = humidity6;
+        MassData4(end+1) = Mass4;
 
+        tempData5(end+1) = temperature5;
+        humidityData5(end+1) = humidity5;
 
-    %% Plots
-
-    % Mass
-    set(massPlot4, ...
-        'XData', timeData, ...
-        'YData', MassData4);
-
-    % Temperature 5
-    set(tempPlot5, ...
-        'XData', timeData, ...
-        'YData', tempData5);
-
-    % Humidity 5
-    set(humidityPlot5, ...
-        'XData', timeData, ...
-        'YData', humidityData5);
-
-    % Temperature 6
-    set(tempPlot6, ...
-        'XData', timeData, ...
-        'YData', tempData6);
-
-    % Humidity 6
-    set(humidityPlot6, ...
-        'XData', timeData, ...
-        'YData', humidityData6);
+        tempData6(end+1) = temperature6;
+        humidityData6(end+1) = humidity6;
 
 
-    %% Save temp data
+        %% Plots
 
-    newTempRow = table( ...
-        elapsedTime, ...
-        temperature5, ...
-        humidity5, ...
-        temperature6, ...
-        humidity6, ...
-        'VariableNames', ...
-        {'Time_s','Temp5_C','Humidity5_percent', ...
-         'Temp6_C','Humidity6_percent'});
+        % Mass
+        set(massPlot4, ...
+            'XData', timeData, ...
+            'YData', MassData4);
 
-    tempTable = [tempTable; newTempRow];
+        % Temperature 5
+        set(tempPlot5, ...
+            'XData', timeData, ...
+            'YData', tempData5);
+
+        % Humidity 5
+        set(humidityPlot5, ...
+            'XData', timeData, ...
+            'YData', humidityData5);
+
+        % Temperature 6
+        set(tempPlot6, ...
+            'XData', timeData, ...
+            'YData', tempData6);
+
+        % Humidity 6
+        set(humidityPlot6, ...
+            'XData', timeData, ...
+            'YData', humidityData6);
 
 
-    %% Save mass data
+        %% Save temp data
 
-    newMassRow = table( ...
-        elapsedTime, ...
-        Mass4, ...
-        'VariableNames', ...
-        {'Time_s','Mass'});
+        newTempRow = table( ...
+            elapsedTime, ...
+            temperature5, ...
+            humidity5, ...
+            temperature6, ...
+            humidity6, ...
+            'VariableNames', ...
+            {'Time_s','Temp5_C','Humidity5_percent', ...
+             'Temp6_C','Humidity6_percent'});
 
-    massTable = [massTable; newMassRow];
+        tempTable = [tempTable; newTempRow];
 
 
-    %% CSV updates
+        %% Save mass data
 
-    writetable(tempTable, tempFile);
-    writetable(massTable, massFile);
+        newMassRow = table( ...
+            elapsedTime, ...
+            Mass4, ...
+            'VariableNames', ...
+            {'Time_s','Mass'});
+
+        massTable = [massTable; newMassRow];
+
+
+        %% CSV updates
+
+        writetable(tempTable, tempFile);
+        writetable(massTable, massFile);
+
+    end
 
 
     %% Figure
 
     drawnow limitrate;
 
+    % Small pause so MATLAB does not run the loop unnecessarily fast
+    pause(0.01);
+
 end
 
 
-
+%% Final CSV updates
 
 % Make sure final data is saved
 writetable(tempTable, tempFile);
