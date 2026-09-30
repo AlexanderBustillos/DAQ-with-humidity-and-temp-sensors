@@ -1,0 +1,383 @@
+%% SHT31 + Mass Balance Serial Reader
+close all;
+clear;
+clc;
+
+%% Serial
+
+% COM4 = Mass balance
+% COM5 = Room temperature/humidity sensor
+% COM6 = Inside chamber temperature/humidity sensor
+
+port4 = "/COM4";
+port5 = "/COM5";
+port6 = "/COM6";
+
+baudRate = 9600;
+
+% Test number
+% Change this for each new experiment
+testNumber = 1;
+
+% Folder where CSV files will be saved
+directory_samples = '/Users/alex/Desktop/samples/';
+
+
+
+%% Serial connecctions
+
+disp("Connecting to serial devices...");
+
+MB4 = serialport(port4, baudRate);
+arduino5 = serialport(port5, baudRate);
+arduino6 = serialport(port6, baudRate);
+
+% Clear any old data
+flush(MB4);
+flush(arduino5);
+flush(arduino6);
+
+% Give Arduinos/sensors time to start
+pause(2);
+
+disp("Serial connections established.");
+
+
+%% CSV file names
+
+tempFile = fullfile(directory_samples, ...
+    sprintf('Temp%d.csv', testNumber));
+
+massFile = fullfile(directory_samples, ...
+    sprintf('Mass%d.csv', testNumber));
+
+% Check if files already exist
+if exist(tempFile, 'file')
+    warning("Temperature file already exists: %s", tempFile);
+end
+
+if exist(massFile, 'file')
+    warning("Mass file already exists: %s", massFile);
+end
+
+
+%% Data tables
+
+% Temperature/humidity data
+tempTable = table('Size', [0 5],'VariableTypes', {'double','double','double','double','double'}, ...
+    'VariableNames', ...
+    {'Time_s','Temp5_C','Humidity5_percent','Temp6_C','Humidity6_percent'});
+
+% Mass data
+massTable = table( 'Size', [0 2], ...
+    'VariableTypes', {'double','double'}, ...
+    'VariableNames', ...
+    {'Time_s','Mass'});
+
+
+%% Figures
+
+fig = figure('Name', 'SHT31 + Mass Balance Data', ...
+             'NumberTitle', 'off');
+
+% Mass
+axMass = subplot(5,1,1);
+
+massPlot4 = plot(axMass, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+
+grid(axMass, 'on');
+
+xlabel(axMass, "Time (s)");
+ylabel(axMass, "Mass");
+title(axMass, "Mass Balance");
+
+
+% Temp sensor 5
+axTemp5 = subplot(5,1,2);
+
+tempPlot5 = plot(axTemp5, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+
+grid(axTemp5, 'on');
+
+xlabel(axTemp5, "Time (s)");
+ylabel(axTemp5, "Temperature (°C)");
+title(axTemp5, "SHT31 Temperature - COM5");
+
+
+% Humidity sensor 5
+axHumidity5 = subplot(5,1,3);
+
+humidityPlot5 = plot(axHumidity5, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+
+grid(axHumidity5, 'on');
+
+xlabel(axHumidity5, "Time (s)");
+ylabel(axHumidity5, "Humidity (%)");
+title(axHumidity5, "SHT31 Humidity - COM5");
+
+
+% Temp sensor 6
+axTemp6 = subplot(5,1,4);
+
+tempPlot6 = plot(axTemp6, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+
+grid(axTemp6, 'on');
+
+xlabel(axTemp6, "Time (s)");
+ylabel(axTemp6, "Temperature (°C)");
+title(axTemp6, "SHT31 Temperature - COM6");
+
+
+% Humidity sensor 6
+axHumidity6 = subplot(5,1,5);
+
+humidityPlot6 = plot(axHumidity6, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+
+grid(axHumidity6, 'on');
+
+xlabel(axHumidity6, "Time (s)");
+ylabel(axHumidity6, "Humidity (%)");
+title(axHumidity6, "SHT31 Humidity - COM6");
+
+
+%% Data tips
+
+dcm = datacursormode(fig);
+
+dcm.Enable = 'on';
+dcm.SnapToDataVertex = 'on';
+dcm.UpdateFcn = @dataTipText;
+
+
+%% Buffers
+
+timeData = [];
+
+MassData4 = [];
+
+tempData5 = [];
+humidityData5 = [];
+
+tempData6 = [];
+humidityData6 = [];
+
+
+%% Timmer
+
+startTime = datetime("now");
+
+
+
+%% Main loop
+
+while isvalid(fig)
+
+    %% Mass balance
+
+    try
+        data4 = readline(MB4);
+
+        values4 = sscanf(data4, "%f");
+
+        if isempty(values4)
+            continue;
+        end
+
+        Mass4 = values4(1);
+
+    catch
+        warning("Could not read mass balance.");
+        continue;
+    end
+
+
+    %% Sensor 5
+
+    try
+        data5 = readline(arduino5);
+
+        values5 = sscanf(data5, "%f,%f");
+
+        if length(values5) < 2
+            continue;
+        end
+
+        temperature5 = values5(1);
+        humidity5 = values5(2);
+
+    catch
+        warning("Could not read COM5.");
+        continue;
+    end
+
+
+    %% Sensor 6
+
+    try
+        data6 = readline(arduino6);
+
+        values6 = sscanf(data6, "%f,%f");
+
+        if length(values6) < 2
+            continue;
+        end
+
+        temperature6 = values6(1);
+        humidity6 = values6(2);
+
+    catch
+        warning("Could not read COM6.");
+        continue;
+    end
+
+
+    %% Time
+
+    elapsedTime = seconds(datetime("now") - startTime);
+
+
+    %% Store data
+
+    timeData(end+1) = elapsedTime;
+
+    MassData4(end+1) = Mass4;
+
+    tempData5(end+1) = temperature5;
+    humidityData5(end+1) = humidity5;
+
+    tempData6(end+1) = temperature6;
+    humidityData6(end+1) = humidity6;
+
+
+    %% Plots
+
+    % Mass
+    set(massPlot4, ...
+        'XData', timeData, ...
+        'YData', MassData4);
+
+    % Temperature 5
+    set(tempPlot5, ...
+        'XData', timeData, ...
+        'YData', tempData5);
+
+    % Humidity 5
+    set(humidityPlot5, ...
+        'XData', timeData, ...
+        'YData', humidityData5);
+
+    % Temperature 6
+    set(tempPlot6, ...
+        'XData', timeData, ...
+        'YData', tempData6);
+
+    % Humidity 6
+    set(humidityPlot6, ...
+        'XData', timeData, ...
+        'YData', humidityData6);
+
+
+    %% Save temp data
+
+    newTempRow = table( ...
+        elapsedTime, ...
+        temperature5, ...
+        humidity5, ...
+        temperature6, ...
+        humidity6, ...
+        'VariableNames', ...
+        {'Time_s','Temp5_C','Humidity5_percent', ...
+         'Temp6_C','Humidity6_percent'});
+
+    tempTable = [tempTable; newTempRow];
+
+
+    %% Save mass data
+
+    newMassRow = table( ...
+        elapsedTime, ...
+        Mass4, ...
+        'VariableNames', ...
+        {'Time_s','Mass'});
+
+    massTable = [massTable; newMassRow];
+
+
+    %% CSV updates
+
+    writetable(tempTable, tempFile);
+    writetable(massTable, massFile);
+
+
+    %% Figure
+
+    drawnow limitrate;
+
+end
+
+
+
+
+% Make sure final data is saved
+writetable(tempTable, tempFile);
+writetable(massTable, massFile);
+
+% Clear serial connections
+clear MB4 arduino5 arduino6;
+
+
+
+%% data functon
+
+function txt = dataTipText(~, event)
+
+    % Get point location
+    pos = event.Position;
+
+    t = pos(1);
+    v = pos(2);
+
+    % Find which axis the point belongs to
+    ax = ancestor(event.Target, 'axes');
+
+    % Get axis title
+    axTitle = ax.Title.String;
+
+    % Determine what type of data is being displayed
+
+    if contains(axTitle, "Mass")
+
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Mass: %.2f', v) ...
+            };
+
+    elseif contains(axTitle, "Temperature")
+
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Temperature: %.2f °C', v) ...
+            };
+
+    elseif contains(axTitle, "Humidity")
+
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Humidity: %.2f %%', v) ...
+            };
+
+    else
+
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Value: %.2f', v) ...
+            };
+
+    end
+
+end
