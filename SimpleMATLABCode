@@ -54,7 +54,7 @@ end
 massTable = table('Size', [0 2], ...
     'VariableTypes', {'double','double'}, ...
     'VariableNames', ...
-    {'Time_s','Mass'});
+    {'Time_s','Mass_g'});
 
 
 %% Figure
@@ -68,7 +68,7 @@ massPlot4 = plot(NaN, NaN, '-o', ...
 grid on;
 
 xlabel("Time (s)");
-ylabel("Mass");
+ylabel("Mass (g)");
 title("Mass Balance");
 
 
@@ -81,7 +81,7 @@ dcm.SnapToDataVertex = 'on';
 dcm.UpdateFcn = @dataTipText;
 
 
-%% Buffer
+%% Buffers
 
 timeData = [];
 
@@ -105,6 +105,9 @@ while isvalid(fig)
 
             data4 = readline(MB4);
 
+
+
+            % Extract the number from the input
             values4 = sscanf(data4, "%f");
 
             if ~isempty(values4)
@@ -138,7 +141,7 @@ while isvalid(fig)
                     elapsedTime, ...
                     Mass4, ...
                     'VariableNames', ...
-                    {'Time_s','Mass'});
+                    {'Time_s','Mass_g'});
 
                 massTable = [massTable; newMassRow];
 
@@ -188,7 +191,7 @@ function txt = dataTipText(~, event)
 
     txt = { ...
         sprintf('Time: %.2f s', t), ...
-        sprintf('Mass: %.3f', v) ...
+        sprintf('Mass: %.3f g', v) ...
         };
 
 end
