@@ -99,21 +99,26 @@ while isvalid(fig)
 
     %% Mass balance
 
-    if MB4.NumBytesAvailable > 0
+if MB4.NumBytesAvailable > 0
 
-        try
+    try
+
+        % Read all available lines
+        while MB4.NumBytesAvailable > 0
 
             data4 = readline(MB4);
 
+            % Example input:
+            % +   0.005 g +
+            %    0.005 g +
+            %    0.005 g
 
-
-            % Extract the number from the input
+            % Extract the number from the line
             values4 = sscanf(data4, "%f");
 
             if ~isempty(values4)
 
                 Mass4 = values4(1);
-
 
                 %% Time
 
@@ -152,13 +157,15 @@ while isvalid(fig)
 
             end
 
-        catch
-
-            warning("Could not read mass balance.");
-
         end
 
+    catch
+
+        warning("Could not read mass balance.");
+
     end
+
+end
 
 
     %% Figure
