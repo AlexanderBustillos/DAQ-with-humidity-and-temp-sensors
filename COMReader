@@ -1,0 +1,35 @@
+%% COM4 Serial Reader
+close all;
+clear;
+clc;
+
+%% Serial
+
+port4 = "/COM4";
+baudRate = 9600;
+
+MB4 = serialport(port4, baudRate);
+
+flush(MB4);
+
+pause(2);
+
+disp("Reading COM4...");
+disp("");
+
+
+%% Main loop
+
+while true
+
+    if MB4.NumBytesAvailable > 0
+
+        data4 = readline(MB4);
+
+        disp(data4);
+
+    end
+
+    pause(0.01);
+
+end
