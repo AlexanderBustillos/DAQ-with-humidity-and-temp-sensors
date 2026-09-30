@@ -1,67 +1,194 @@
-%% SHT31 Serial Reader
+%% Mass Balance Serial Reader
 close all;
 clear;
 clc;
 
-% Serial Settings
-port = "/dev/cu.usbmodem11401";
+%% Serial
+
+% COM4 = Mass balance
+
+port4 = "/COM4";
+
 baudRate = 9600;
 
-% Create serial connection
-arduino = serialport(port, baudRate);
+% Test number
+% Change this for each new experiment
+testNumber = 1;
+
+% Folder where CSV files will be saved
+directory_samples = '/Users/alex/Desktop/samples/';
+
+
+
+%% Serial connecction
+
+disp("Connecting to mass balance...");
+
+MB4 = serialport(port4, baudRate);
 
 % Clear any old data
-flush(arduino);
+flush(MB4);
 
-% Give the Arduino time to start
+% Give mass balance time to start
 pause(2);
 
-% Create Figure
-figure;
+% Clear any startup data
+flush(MB4);
 
-% Temperature plot
-subplot(2,1,1);
-tempPlot = animatedline;
+disp("Serial connection established.");
+
+
+%% CSV file name
+
+massFile = fullfile(directory_samples, ...
+    sprintf('Mass%d.csv', testNumber));
+
+% Check if file already exists
+if exist(massFile, 'file')
+    warning("Mass file already exists: %s", massFile);
+end
+
+
+%% Data table
+
+massTable = table('Size', [0 2], ...
+    'VariableTypes', {'double','double'}, ...
+    'VariableNames', ...
+    {'Time_s','Mass'});
+
+
+%% Figure
+
+fig = figure('Name', 'Mass Balance Data', ...
+             'NumberTitle', 'off');
+
+massPlot4 = plot(NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+
 grid on;
-xlabel("Time (s)");
-ylabel("Temperature (°C)");
-title("SHT31 Temperature");
 
-% Humidity plot
-subplot(2,1,2);
-humidityPlot = animatedline;
-grid on;
 xlabel("Time (s)");
-ylabel("Humidity (%)");
-title("SHT31 Humidity");
+ylabel("Mass");
+title("Mass Balance");
 
-% Start Timer
+
+%% Data tips
+
+dcm = datacursormode(fig);
+
+dcm.Enable = 'on';
+dcm.SnapToDataVertex = 'on';
+dcm.UpdateFcn = @dataTipText;
+
+
+%% Buffer
+
+timeData = [];
+
+MassData4 = [];
+
+
+%% Timmer
+
 startTime = datetime("now");
 
-disp("Reading SHT31...");
 
-% Read Serial Data
-while true
+%% Main loop
 
-    % Read one line from Arduino
-    data = readline(arduino);
+while isvalid(fig)
 
-    % Convert from string to numbers
-    values = sscanf(data, "%f,%f");
+    %% Mass balance
+
+    if MB4.NumBytesAvailable > 0
+
+        try
+
+            data4 = readline(MB4);
+
+            values4 = sscanf(data4, "%f");
+
+            if ~isempty(values4)
+
+                Mass4 = values4(1);
 
 
-    temperature = values(1);
-    humidity = values(2);
+                %% Time
 
-    % Calculate elapsed time
-    elapsedTime = seconds(datetime("now") - startTime);
+                elapsedTime = seconds( ...
+                    datetime("now") - startTime);
 
-    % Add data to plots
-    addpoints(tempPlot, elapsedTime, temperature);
-    addpoints(humidityPlot, elapsedTime, humidity);
 
-    % Update plots
+                %% Store data
+
+                timeData(end+1) = elapsedTime;
+
+                MassData4(end+1) = Mass4;
+
+
+                %% Plot
+
+                set(massPlot4, ...
+                    'XData', timeData, ...
+                    'YData', MassData4);
+
+
+                %% Save mass data
+
+                newMassRow = table( ...
+                    elapsedTime, ...
+                    Mass4, ...
+                    'VariableNames', ...
+                    {'Time_s','Mass'});
+
+                massTable = [massTable; newMassRow];
+
+
+                %% CSV update
+
+                writetable(massTable, massFile);
+
+            end
+
+        catch
+
+            warning("Could not read mass balance.");
+
+        end
+
+    end
+
+
+    %% Figure
+
     drawnow limitrate;
 
-        
+    % Small pause
+    pause(0.01);
+
+end
+
+
+%% Final CSV update
+
+writetable(massTable, massFile);
+
+% Clear serial connection
+clear MB4;
+
+
+%% Data function
+
+function txt = dataTipText(~, event)
+
+    % Get point location
+    pos = event.Position;
+
+    t = pos(1);
+    v = pos(2);
+
+    txt = { ...
+        sprintf('Time: %.2f s', t), ...
+        sprintf('Mass: %.3f', v) ...
+        };
+
 end
