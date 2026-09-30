@@ -6,7 +6,6 @@ clc;
 %% Serial
 
 % COM4 = Mass balance
-
 port4 = "/COM4";
 
 baudRate = 9600;
@@ -19,8 +18,7 @@ testNumber = 1;
 directory_samples = '/Users/alex/Desktop/samples/';
 
 
-
-%% Serial connecction
+%% Serial connection
 
 disp("Connecting to mass balance...");
 
@@ -54,7 +52,7 @@ end
 massTable = table('Size', [0 2], ...
     'VariableTypes', {'double','double'}, ...
     'VariableNames', ...
-    {'Time_s','Mass_g'});
+    {'Time_s','Mass'});
 
 
 %% Figure
@@ -81,14 +79,14 @@ dcm.SnapToDataVertex = 'on';
 dcm.UpdateFcn = @dataTipText;
 
 
-%% Buffers
+%% Buffer
 
 timeData = [];
 
 MassData4 = [];
 
 
-%% Timmer
+%% Timer
 
 startTime = datetime("now");
 
@@ -99,26 +97,31 @@ while isvalid(fig)
 
     %% Mass balance
 
-if MB4.NumBytesAvailable > 0
+    if MB4.NumBytesAvailable > 0
 
-    try
+        try
 
-        % Read all available lines
-        while MB4.NumBytesAvailable > 0
-
+            % Read one complete line from COM4
             data4 = readline(MB4);
 
-            % Example input:
-            % +   0.005 g +
-            %    0.005 g +
-            %    0.005 g
+            % Display exactly what the mass balance sent
+            disp("Mass balance: " + data4);
 
-            % Extract the number from the line
-            values4 = sscanf(data4, "%f");
+            % Find the number in the line
+            % Example:
+            % "+   0.000 g"
+            % "+   0.005 g"
+            numberString = regexp(data4, ...
+                '[-+]?\s*\d+\.\d+', 'match', 'once');
 
-            if ~isempty(values4)
+            if ~isempty(numberString)
 
-                Mass4 = values4(1);
+                % Remove spaces
+                numberString = strrep(numberString, ' ', '');
+
+                % Convert to number
+                Mass4 = str2double(numberString);
+
 
                 %% Time
 
@@ -146,7 +149,7 @@ if MB4.NumBytesAvailable > 0
                     elapsedTime, ...
                     Mass4, ...
                     'VariableNames', ...
-                    {'Time_s','Mass_g'});
+                    {'Time_s','Mass'});
 
                 massTable = [massTable; newMassRow];
 
@@ -157,15 +160,13 @@ if MB4.NumBytesAvailable > 0
 
             end
 
+        catch ME
+
+            warning("Could not read mass balance: %s", ME.message);
+
         end
 
-    catch
-
-        warning("Could not read mass balance.");
-
     end
-
-end
 
 
     %% Figure
@@ -186,7 +187,7 @@ writetable(massTable, massFile);
 clear MB4;
 
 
-%% Data function
+%% Data tip function
 
 function txt = dataTipText(~, event)
 
@@ -198,7 +199,7 @@ function txt = dataTipText(~, event)
 
     txt = { ...
         sprintf('Time: %.2f s', t), ...
-        sprintf('Mass: %.3f g', v) ...
+        sprintf('Mass: %.4f g', v) ...
         };
 
 end
