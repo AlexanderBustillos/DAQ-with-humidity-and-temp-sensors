@@ -20,8 +20,19 @@ baudRate = 9600;
 testNumber = 1;
 
 % Folder where CSV files will be saved
-directory_samples = '/Users/alex/Desktop/samples/';
+directory_samples = '\Users\PV\Desktop\samples';
 
+
+%% CSV file
+
+% One CSV file 
+dataFile = fullfile(directory_samples, ...
+    sprintf('Test%d.csv', testNumber));
+
+% Check if file already exists
+if exist(dataFile, 'file')
+    warning("Data file already exists: %s", dataFile);
+end
 
 
 %% Serial connections
@@ -48,45 +59,23 @@ flush(arduino6);
 disp("Serial connections established.");
 
 
-%% CSV file names
+%% Data table
 
-tempFile = fullfile(directory_samples, ...
-    sprintf('Temp%d.csv', testNumber));
-
-massFile = fullfile(directory_samples, ...
-    sprintf('Mass%d.csv', testNumber));
-
-% Check if files already exist
-if exist(tempFile, 'file')
-    warning("Temperature file already exists: %s", tempFile);
-end
-
-if exist(massFile, 'file')
-    warning("Mass file already exists: %s", massFile);
-end
-
-
-%% Data tables
-
-% Temperature/humidity data
-tempTable = table('Size', [0 5], ...
+% One table
+dataTable = table('Size', [0 6], ...
     'VariableTypes', ...
-    {'double','double','double','double','double'}, ...
+    {'double','double','double','double','double','double'}, ...
     'VariableNames', ...
-    {'Time_s','Temp5_C','Humidity5_percent', ...
+    {'Time_s','Mass_g', ...
+     'Temp5_C','Humidity5_percent', ...
      'Temp6_C','Humidity6_percent'});
-
-% Mass data
-massTable = table('Size', [0 2], ...
-    'VariableTypes', {'double','double'}, ...
-    'VariableNames', ...
-    {'Time_s','Mass'});
 
 
 %% Figures
 
 fig = figure('Name', 'SHT31 + Mass Balance Data', ...
              'NumberTitle', 'off');
+
 
 % Mass
 axMass = subplot(5,1,1);
@@ -162,7 +151,7 @@ dcm.SnapToDataVertex = 'on';
 dcm.UpdateFcn = @dataTipText;
 
 
-%% Buffers
+%% Data arrays
 
 timeData = [];
 
@@ -193,9 +182,13 @@ humidity5 = NaN;
 temperature6 = NaN;
 humidity6 = NaN;
 
+
 %% Reading timer
 
+% Used to save one row every 1 second
 lastReadingTime = -1;
+
+
 %% Main loop
 
 while isvalid(fig)
@@ -213,7 +206,6 @@ while isvalid(fig)
             disp("Mass balance: " + data4);
 
             % Find the number in the line
-
             numberString = regexp(data4, ...
                 '[-+]?\s*\d+\.\d+', 'match', 'once');
 
@@ -295,90 +287,90 @@ while isvalid(fig)
         datetime("now") - startTime);
 
 
-   %% Store data
+    %% Store data
 
-% Only store a measurement once all three devices
-% have provided at least one valid measurement.
+    % Only store a measurement once all three devices
+    % have provided at least one valid measurement.
 
-if ~isnan(Mass4) && ...
-   ~isnan(temperature5) && ...
-   ~isnan(humidity5) && ...
-   ~isnan(temperature6) && ...
-   ~isnan(humidity6)
+    if ~isnan(Mass4) && ...
+       ~isnan(temperature5) && ...
+       ~isnan(humidity5) && ...
+       ~isnan(temperature6) && ...
+       ~isnan(humidity6)
 
-    % Only save one reading every 1 second
-    if elapsedTime - lastReadingTime >= 1
+        % Only save one reading every 1 second
+        if elapsedTime - lastReadingTime >= 1
 
-        lastReadingTime = elapsedTime;
-
-        timeData(end+1) = elapsedTime;
-
-        MassData4(end+1) = Mass4;
-
-        tempData5(end+1) = temperature5;
-        humidityData5(end+1) = humidity5;
-
-        tempData6(end+1) = temperature6;
-        humidityData6(end+1) = humidity6;
+            lastReadingTime = elapsedTime;
 
 
-        %% Plots
+            %% Store data in arrays
 
-        set(massPlot4, ...
-            'XData', timeData, ...
-            'YData', MassData4);
+            timeData(end+1) = elapsedTime;
 
-        set(tempPlot5, ...
-            'XData', timeData, ...
-            'YData', tempData5);
+            MassData4(end+1) = Mass4;
 
-        set(humidityPlot5, ...
-            'XData', timeData, ...
-            'YData', humidityData5);
+            tempData5(end+1) = temperature5;
+            humidityData5(end+1) = humidity5;
 
-        set(tempPlot6, ...
-            'XData', timeData, ...
-            'YData', tempData6);
-
-        set(humidityPlot6, ...
-            'XData', timeData, ...
-            'YData', humidityData6);
+            tempData6(end+1) = temperature6;
+            humidityData6(end+1) = humidity6;
 
 
-        %% Save temperature data
+            %% Update plots
 
-        newTempRow = table( ...
-            elapsedTime, ...
-            temperature5, ...
-            humidity5, ...
-            temperature6, ...
-            humidity6, ...
-            'VariableNames', ...
-            {'Time_s','Temp5_C','Humidity5_percent', ...
-             'Temp6_C','Humidity6_percent'});
+            set(massPlot4, ...
+                'XData', timeData, ...
+                'YData', MassData4);
 
-        tempTable = [tempTable; newTempRow];
+            set(tempPlot5, ...
+                'XData', timeData, ...
+                'YData', tempData5);
 
+            set(humidityPlot5, ...
+                'XData', timeData, ...
+                'YData', humidityData5);
 
-        %% Save mass data
+            set(tempPlot6, ...
+                'XData', timeData, ...
+                'YData', tempData6);
 
-        newMassRow = table( ...
-            elapsedTime, ...
-            Mass4, ...
-            'VariableNames', ...
-            {'Time_s','Mass'});
-
-        massTable = [massTable; newMassRow];
+            set(humidityPlot6, ...
+                'XData', timeData, ...
+                'YData', humidityData6);
 
 
-        %% CSV updates
+            %% Create one new row
 
-        writetable(tempTable, tempFile);
-        writetable(massTable, massFile);
+            newRow = table( ...
+                elapsedTime, ...
+                Mass4, ...
+                temperature5, ...
+                humidity5, ...
+                temperature6, ...
+                humidity6, ...
+                'VariableNames', ...
+                {'Time_s','Mass_g', ...
+                 'Temp5_C','Humidity5_percent', ...
+                 'Temp6_C','Humidity6_percent'});
+
+
+            %% Add row to main table
+
+            dataTable = [dataTable; newRow];
+
+
+            %% Save to CSV file
+
+            writetable(dataTable, dataFile);
+
+            % Display the row being saved
+            disp("Saved data:");
+            disp(newRow);
+
+        end
 
     end
-
-end
 
 
     %% Figure
@@ -391,13 +383,15 @@ end
 end
 
 
-%% Final CSV updates
+%% Final CSV update
 
 % Make sure final data is saved
-writetable(tempTable, tempFile);
-writetable(massTable, massFile);
+writetable(dataTable, dataFile);
 
-% Clear serial connections
+
+
+%% Clear serial connections
+
 clear MB4 arduino5 arduino6;
 
 
