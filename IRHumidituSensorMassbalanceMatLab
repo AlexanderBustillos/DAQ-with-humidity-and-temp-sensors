@@ -3,6 +3,7 @@ close all;
 clear;
 clc;
 %% Serial
+%Change this based on the coms that are needed
 % COM4 = Mass balance
 % COM5 = Room temperature/humidity sensor
 % COM6 = Inside chamber temperature/humidity sensor
@@ -12,6 +13,8 @@ port5 = "COM5";
 port6 = "COM6";
 port7 = "COM7";
 
+%Every sensor usually uses a baud rate of 9600, if a sensor using a
+%different rate then make a new variable
 baudRate = 9600;
 % Test number
 % Change this for each new experiment
@@ -29,12 +32,11 @@ end
 %% CSV columns
 % Defined once and used for the MATLAB table, the CSV header, and
 % every new row, so they can never get out of sync.
-% IRValue7 is the SECOND number the IR sensor sends (rename it here
-% and in the IR plot labels below if it is something specific).
+% The IR sensor sends the ambient temperature first, then the object temperature.
 varNames = {'Time_s','Mass_g', ...
     'Temp5_C','Humidity5_percent', ...
     'Temp6_C','Humidity6_percent', ...
-    'IRTemp7_C','IRValue7'};
+    'IRAmbientTemp7_C','IRObjectTemp7_C'};
 nVars = numel(varNames);
 %% CSV file
 % One CSV file per test
@@ -49,17 +51,16 @@ if isfile(dataFile)
     % The program will APPEND to this file.
     % Change testNumber if you want a new file.
     %
-    % Safety check: an old file from the previous version of this
-    % script has fewer columns. Appending to it would corrupt it.
+    % Safety check: an older file with different columns or column
+    % names would end up with rows under the wrong header.
     fid = fopen(dataFile, 'r');
     firstLine = fgetl(fid);
     fclose(fid);
     if ischar(firstLine)
         needHeader = false;   % file already has a header
-        if numel(strsplit(firstLine, ',')) ~= nVars
-            error("Existing file %s has a different number of columns " + ...
-                "than this script writes (%d). Change testNumber.", ...
-                dataFile, nVars);
+        if ~strcmp(strtrim(firstLine), strjoin(varNames, ','))
+            error("Existing file %s has a different header than " + ...
+                "this script writes. Change testNumber.", dataFile);
         end
     end
 end
@@ -68,6 +69,7 @@ disp("Connecting to serial devices...");
 MB4 = serialport(port4, baudRate);
 arduino5 = serialport(port5, baudRate);
 arduino6 = serialport(port6, baudRate);
+% IR sensor (ambient temp, then object temp)
 IR7 = serialport(port7, baudRate);
 % Clear any old data
 flush(MB4);
@@ -92,7 +94,7 @@ dataTable = table('Size', [0 nVars], ...
 %   Row 1: Mass (full width)
 %   Row 2: Room temp | Room humidity      (COM5)
 %   Row 3: Chamber temp | Chamber humidity (COM6)
-%   Row 4: IR temp | IR value 2           (COM7)
+%   Row 4: IR ambient temp | IR object temp (COM7)
 fig = figure('Name', 'SHT31 + Mass Balance + IR Data', ...
     'NumberTitle', 'off', ...
     'Units', 'normalized', ...
@@ -138,21 +140,21 @@ xlabel(axHumidity6, "Time (s)");
 ylabel(axHumidity6, "Humidity (%)");
 title(axHumidity6, "SHT31 Humidity - COM6");
 % IR sensor 7 - temperature
-axIRTemp7 = subplot(4,2,7);
-irTempPlot7 = plot(axIRTemp7, NaN, NaN, '-o', ...
+axIRAmbientTemp7 = subplot(4,2,7);
+irAmbientTempPlot7 = plot(axIRAmbientTemp7, NaN, NaN, '-o', ...
     'MarkerSize', 4);
-grid(axIRTemp7, 'on');
-xlabel(axIRTemp7, "Time (s)");
-ylabel(axIRTemp7, "Temperature (°C)");
-title(axIRTemp7, "IR Temperature - COM7");
+grid(axIRAmbientTemp7, 'on');
+xlabel(axIRAmbientTemp7, "Time (s)");
+ylabel(axIRAmbientTemp7, "Ambient Temperature (°C)");
+title(axIRAmbientTemp7, "IR Temperature Ambient - COM7");
 % IR sensor 7 - second value
-axIRValue7 = subplot(4,2,8);
-irValuePlot7 = plot(axIRValue7, NaN, NaN, '-o', ...
+axIRObjectTemp7 = subplot(4,2,8);
+irObjectTempPlot7 = plot(axIRObjectTemp7, NaN, NaN, '-o', ...
     'MarkerSize', 4);
-grid(axIRValue7, 'on');
-xlabel(axIRValue7, "Time (s)");
-ylabel(axIRValue7, "Value 2");
-title(axIRValue7, "IR Value 2 - COM7");
+grid(axIRObjectTemp7, 'on');
+xlabel(axIRObjectTemp7, "Time (s)");
+ylabel(axIRObjectTemp7, "Object Temperature (°C)");
+title(axIRObjectTemp7, "IR Temperature Object - COM7");
 %% Data tips
 dcm = datacursormode(fig);
 dcm.Enable = 'on';
@@ -165,8 +167,8 @@ tempData5 = [];
 humidityData5 = [];
 tempData6 = [];
 humidityData6 = [];
-irTempData7 = [];
-irValueData7 = [];
+irAmbientTempData7 = [];
+irObjectTempData7 = [];
 %% Timer
 startTime = datetime("now");
 %% Last measurements
@@ -177,8 +179,8 @@ temperature5 = NaN;
 humidity5 = NaN;
 temperature6 = NaN;
 humidity6 = NaN;
-irTemp7 = NaN;
-irValue7 = NaN;
+irAmbientTemp7 = NaN;
+irObjectTemp7 = NaN;
 %% Reading timer
 % Used to save one row every 1 second
 lastReadingTime = -1;
@@ -239,8 +241,8 @@ while isvalid(fig)
             data7 = readline(IR7);
             values7 = sscanf(data7, "%f,%f");
             if length(values7) >= 2
-                irTemp7 = values7(1);
-                irValue7 = values7(2);
+                irAmbientTemp7 = values7(1);
+                irObjectTemp7 = values7(2);
             end
         catch ME
             warning("Could not read COM7: %s", ...
@@ -258,8 +260,8 @@ while isvalid(fig)
             ~isnan(humidity5) && ...
             ~isnan(temperature6) && ...
             ~isnan(humidity6) && ...
-            ~isnan(irTemp7) && ...
-            ~isnan(irValue7)
+            ~isnan(irAmbientTemp7) && ...
+            ~isnan(irObjectTemp7)
         % Only save one reading every 1 second
         if elapsedTime - lastReadingTime >= 1
             lastReadingTime = elapsedTime;
@@ -270,8 +272,8 @@ while isvalid(fig)
             humidityData5(end+1) = humidity5;
             tempData6(end+1) = temperature6;
             humidityData6(end+1) = humidity6;
-            irTempData7(end+1) = irTemp7;
-            irValueData7(end+1) = irValue7;
+            irAmbientTempData7(end+1) = irAmbientTemp7;
+            irObjectTempData7(end+1) = irObjectTemp7;
             %% Update plots
             set(massPlot4, ...
                 'XData', timeData, ...
@@ -288,12 +290,12 @@ while isvalid(fig)
             set(humidityPlot6, ...
                 'XData', timeData, ...
                 'YData', humidityData6);
-            set(irTempPlot7, ...
+            set(irAmbientTempPlot7, ...
                 'XData', timeData, ...
-                'YData', irTempData7);
-            set(irValuePlot7, ...
+                'YData', irAmbientTempData7);
+            set(irObjectTempPlot7, ...
                 'XData', timeData, ...
-                'YData', irValueData7);
+                'YData', irObjectTempData7);
             %% Create one new row
             newRow = table( ...
                 elapsedTime, ...
@@ -302,8 +304,8 @@ while isvalid(fig)
                 humidity5, ...
                 temperature6, ...
                 humidity6, ...
-                irTemp7, ...
-                irValue7, ...
+                irAmbientTemp7, ...
+                irObjectTemp7, ...
                 'VariableNames', varNames);
             %% Add row to main MATLAB table
             dataTable = [dataTable; newRow];
