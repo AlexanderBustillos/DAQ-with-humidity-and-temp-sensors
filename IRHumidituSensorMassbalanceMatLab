@@ -1,0 +1,385 @@
+%% SHT31 + Mass Balance + IR Sensor Serial Reader
+close all;
+clear;
+clc;
+%% Serial
+% COM4 = Mass balance
+% COM5 = Room temperature/humidity sensor
+% COM6 = Inside chamber temperature/humidity sensor
+% COM7 = IR sensor
+port4 = "COM4";
+port5 = "COM5";
+port6 = "COM6";
+port7 = "COM7";
+
+baudRate = 9600;
+% Test number
+% Change this for each new experiment
+testNumber = 1;
+% Folder where CSV files will be saved
+% Use the current Windows user's Desktop
+directory_samples = fullfile( ...
+    getenv('USERPROFILE'), ...
+    'Desktop', ...
+    'samples');
+% Make sure the samples directory exists
+if ~isfolder(directory_samples)
+    mkdir(directory_samples);
+end
+%% CSV columns
+% Defined once and used for the MATLAB table, the CSV header, and
+% every new row, so they can never get out of sync.
+% IRValue7 is the SECOND number the IR sensor sends (rename it here
+% and in the IR plot labels below if it is something specific).
+varNames = {'Time_s','Mass_g', ...
+    'Temp5_C','Humidity5_percent', ...
+    'Temp6_C','Humidity6_percent', ...
+    'IRTemp7_C','IRValue7'};
+nVars = numel(varNames);
+%% CSV file
+% One CSV file per test
+dataFile = fullfile(directory_samples, ...
+    sprintf('Test%d.csv', testNumber));
+% needHeader stays true until the header (or the first row) is written
+needHeader = true;
+% Check if file already exists
+if isfile(dataFile)
+    warning("Data file already exists: %s", dataFile);
+    % NOTE:
+    % The program will APPEND to this file.
+    % Change testNumber if you want a new file.
+    %
+    % Safety check: an old file from the previous version of this
+    % script has fewer columns. Appending to it would corrupt it.
+    fid = fopen(dataFile, 'r');
+    firstLine = fgetl(fid);
+    fclose(fid);
+    if ischar(firstLine)
+        needHeader = false;   % file already has a header
+        if numel(strsplit(firstLine, ',')) ~= nVars
+            error("Existing file %s has a different number of columns " + ...
+                "than this script writes (%d). Change testNumber.", ...
+                dataFile, nVars);
+        end
+    end
+end
+%% Serial connections
+disp("Connecting to serial devices...");
+MB4 = serialport(port4, baudRate);
+arduino5 = serialport(port5, baudRate);
+arduino6 = serialport(port6, baudRate);
+IR7 = serialport(port7, baudRate);
+% Clear any old data
+flush(MB4);
+flush(arduino5);
+flush(arduino6);
+flush(IR7);
+% Give Arduinos/sensors time to start
+pause(2);
+% Clear any startup data
+flush(MB4);
+flush(arduino5);
+flush(arduino6);
+flush(IR7);
+disp("Serial connections established.");
+%% Data table
+% Keep a copy of all collected data in MATLAB memory
+dataTable = table('Size', [0 nVars], ...
+    'VariableTypes', repmat({'double'}, 1, nVars), ...
+    'VariableNames', varNames);
+%% Figures
+% Layout (4 rows x 2 columns):
+%   Row 1: Mass (full width)
+%   Row 2: Room temp | Room humidity      (COM5)
+%   Row 3: Chamber temp | Chamber humidity (COM6)
+%   Row 4: IR temp | IR value 2           (COM7)
+fig = figure('Name', 'SHT31 + Mass Balance + IR Data', ...
+    'NumberTitle', 'off', ...
+    'Units', 'normalized', ...
+    'Position', [0.1 0.05 0.8 0.85]);
+% Mass
+axMass = subplot(4,2,[1 2]);
+massPlot4 = plot(axMass, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+grid(axMass, 'on');
+xlabel(axMass, "Time (s)");
+ylabel(axMass, "Mass (g)");
+title(axMass, "Mass Balance");
+% Temp sensor 5
+axTemp5 = subplot(4,2,3);
+tempPlot5 = plot(axTemp5, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+grid(axTemp5, 'on');
+xlabel(axTemp5, "Time (s)");
+ylabel(axTemp5, "Temperature (°C)");
+title(axTemp5, "SHT31 Temperature - COM5");
+% Humidity sensor 5
+axHumidity5 = subplot(4,2,4);
+humidityPlot5 = plot(axHumidity5, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+grid(axHumidity5, 'on');
+xlabel(axHumidity5, "Time (s)");
+ylabel(axHumidity5, "Humidity (%)");
+title(axHumidity5, "SHT31 Humidity - COM5");
+% Temp sensor 6
+axTemp6 = subplot(4,2,5);
+tempPlot6 = plot(axTemp6, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+grid(axTemp6, 'on');
+xlabel(axTemp6, "Time (s)");
+ylabel(axTemp6, "Temperature (°C)");
+title(axTemp6, "SHT31 Temperature - COM6");
+% Humidity sensor 6
+axHumidity6 = subplot(4,2,6);
+humidityPlot6 = plot(axHumidity6, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+grid(axHumidity6, 'on');
+xlabel(axHumidity6, "Time (s)");
+ylabel(axHumidity6, "Humidity (%)");
+title(axHumidity6, "SHT31 Humidity - COM6");
+% IR sensor 7 - temperature
+axIRTemp7 = subplot(4,2,7);
+irTempPlot7 = plot(axIRTemp7, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+grid(axIRTemp7, 'on');
+xlabel(axIRTemp7, "Time (s)");
+ylabel(axIRTemp7, "Temperature (°C)");
+title(axIRTemp7, "IR Temperature - COM7");
+% IR sensor 7 - second value
+axIRValue7 = subplot(4,2,8);
+irValuePlot7 = plot(axIRValue7, NaN, NaN, '-o', ...
+    'MarkerSize', 4);
+grid(axIRValue7, 'on');
+xlabel(axIRValue7, "Time (s)");
+ylabel(axIRValue7, "Value 2");
+title(axIRValue7, "IR Value 2 - COM7");
+%% Data tips
+dcm = datacursormode(fig);
+dcm.Enable = 'on';
+dcm.SnapToDataVertex = 'on';
+dcm.UpdateFcn = @dataTipText;
+%% Data arrays
+timeData = [];
+MassData4 = [];
+tempData5 = [];
+humidityData5 = [];
+tempData6 = [];
+humidityData6 = [];
+irTempData7 = [];
+irValueData7 = [];
+%% Timer
+startTime = datetime("now");
+%% Last measurements
+% These hold the most recent valid measurement
+% from each sensor.
+Mass4 = NaN;
+temperature5 = NaN;
+humidity5 = NaN;
+temperature6 = NaN;
+humidity6 = NaN;
+irTemp7 = NaN;
+irValue7 = NaN;
+%% Reading timer
+% Used to save one row every 1 second
+lastReadingTime = -1;
+%% Main loop
+while isvalid(fig)
+    %% Mass balance
+    if MB4.NumBytesAvailable > 0
+        try
+            % Read one complete line from COM4
+            data4 = readline(MB4);
+            % Display exactly what the mass balance sent
+            disp("Mass balance: " + data4);
+            % Find the number in the line
+            numberString = regexp(data4, ...
+                '[-+]?\s*\d+\.\d+', 'match', 'once');
+            if ~isempty(numberString)
+                % Remove spaces
+                numberString = strrep(numberString, ' ', '');
+                % Convert string to number
+                Mass4 = str2double(numberString);
+            end
+        catch ME
+            warning("Could not read mass balance: %s", ...
+                ME.message);
+        end
+    end
+    %% Sensor 5
+    if arduino5.NumBytesAvailable > 0
+        try
+            data5 = readline(arduino5);
+            values5 = sscanf(data5, "%f,%f");
+            if length(values5) >= 2
+                temperature5 = values5(1);
+                humidity5 = values5(2);
+            end
+        catch ME
+            warning("Could not read COM5: %s", ...
+                ME.message);
+        end
+    end
+    %% Sensor 6
+    if arduino6.NumBytesAvailable > 0
+        try
+            data6 = readline(arduino6);
+            values6 = sscanf(data6, "%f,%f");
+            if length(values6) >= 2
+                temperature6 = values6(1);
+                humidity6 = values6(2);
+            end
+        catch ME
+            warning("Could not read COM6: %s", ...
+                ME.message);
+        end
+    end
+    %% IR sensor 7
+    if IR7.NumBytesAvailable > 0
+        try
+            data7 = readline(IR7);
+            values7 = sscanf(data7, "%f,%f");
+            if length(values7) >= 2
+                irTemp7 = values7(1);
+                irValue7 = values7(2);
+            end
+        catch ME
+            warning("Could not read COM7: %s", ...
+                ME.message);
+        end
+    end
+    %% Time
+    elapsedTime = seconds( ...
+        datetime("now") - startTime);
+    %% Store data
+    % Only store a measurement once all four devices
+    % have provided at least one valid measurement.
+    if ~isnan(Mass4) && ...
+            ~isnan(temperature5) && ...
+            ~isnan(humidity5) && ...
+            ~isnan(temperature6) && ...
+            ~isnan(humidity6) && ...
+            ~isnan(irTemp7) && ...
+            ~isnan(irValue7)
+        % Only save one reading every 1 second
+        if elapsedTime - lastReadingTime >= 1
+            lastReadingTime = elapsedTime;
+            %% Store data in arrays
+            timeData(end+1) = elapsedTime;
+            MassData4(end+1) = Mass4;
+            tempData5(end+1) = temperature5;
+            humidityData5(end+1) = humidity5;
+            tempData6(end+1) = temperature6;
+            humidityData6(end+1) = humidity6;
+            irTempData7(end+1) = irTemp7;
+            irValueData7(end+1) = irValue7;
+            %% Update plots
+            set(massPlot4, ...
+                'XData', timeData, ...
+                'YData', MassData4);
+            set(tempPlot5, ...
+                'XData', timeData, ...
+                'YData', tempData5);
+            set(humidityPlot5, ...
+                'XData', timeData, ...
+                'YData', humidityData5);
+            set(tempPlot6, ...
+                'XData', timeData, ...
+                'YData', tempData6);
+            set(humidityPlot6, ...
+                'XData', timeData, ...
+                'YData', humidityData6);
+            set(irTempPlot7, ...
+                'XData', timeData, ...
+                'YData', irTempData7);
+            set(irValuePlot7, ...
+                'XData', timeData, ...
+                'YData', irValueData7);
+            %% Create one new row
+            newRow = table( ...
+                elapsedTime, ...
+                Mass4, ...
+                temperature5, ...
+                humidity5, ...
+                temperature6, ...
+                humidity6, ...
+                irTemp7, ...
+                irValue7, ...
+                'VariableNames', varNames);
+            %% Add row to main MATLAB table
+            dataTable = [dataTable; newRow];
+            %% Save new row to CSV
+            %
+            % IMPORTANT:
+            % Only the NEW row is written.
+            % The entire CSV is not rewritten every second.
+            try
+                if needHeader
+                    % First row:
+                    % Write data AND variable names
+                    writetable(newRow, dataFile);
+                    needHeader = false;
+                else
+                    % Subsequent rows:
+                    % Append data WITHOUT writing headers again
+                    writetable(newRow, dataFile, ...
+                        'WriteMode', 'append', ...
+                        'WriteVariableNames', false);
+                end
+                disp("Saved data:");
+                disp(newRow);
+            catch ME
+                % Do NOT stop the experiment if the CSV is
+                % temporarily locked.
+                warning( ...
+                    "Could not write to CSV file. " + ...
+                    "Data remains in MATLAB memory. Error: %s", ...
+                    ME.message);
+            end
+        end
+    end
+    %% Figure
+    drawnow limitrate;
+    % Small pause so MATLAB does not run the loop unnecessarily fast
+    pause(0.01);
+end
+%% Final message
+disp("Data collection stopped.");
+disp("Number of measurements stored in MATLAB:");
+disp(height(dataTable));
+disp("CSV file:");
+disp(dataFile);
+%% Clear serial connections
+clear MB4 arduino5 arduino6 IR7;
+%% Data tip function
+function txt = dataTipText(~, event)
+    % Get point location
+    pos = event.Position;
+    t = pos(1);
+    v = pos(2);
+    % Find which axis the point belongs to
+    ax = ancestor(event.Target, 'axes');
+    % Get axis title
+    axTitle = ax.Title.String;
+    % Determine what type of data is being displayed
+    if contains(axTitle, "Mass")
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Mass: %.4f g', v) ...
+            };
+    elseif contains(axTitle, "Temperature")
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Temperature: %.2f °C', v) ...
+            };
+    elseif contains(axTitle, "Humidity")
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Humidity: %.2f %%', v) ...
+            };
+    else
+        txt = { ...
+            sprintf('Time: %.2f s', t), ...
+            sprintf('Value: %.2f', v) ...
+            };
+    end
+end
