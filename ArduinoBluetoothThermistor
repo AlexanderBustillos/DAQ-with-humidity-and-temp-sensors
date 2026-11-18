@@ -1,0 +1,29 @@
+#include "BluetoothSerial.h"
+
+const int   THERM_PIN = 34;
+const float R_FIXED   = 100000.0;  // 100k fixed resistor
+const float R_NOMINAL = 100000.0;  // thermistor is 100k at 25 C
+const float BETA      = 3950.0;    // adjust with data sheet
+const float T_REF_K   = 298.15;    // 25 C in kelvin
+const float VCC_MV    = 3300.0;
+
+BluetoothSerial SerialBT;
+
+void setup() {
+  Serial.begin(115200);
+  analogSetPinAttenuation(THERM_PIN, ADC_11db);
+  SerialBT.begin("ESP32_Test");  // name that shows up in Bluetooth settings
+  Serial.println("Bluetooth started, ready to pair");
+}
+
+void loop() {
+  long sum = 0;
+  for (int i = 0; i < 32; i++) { sum += analogReadMilliVolts(THERM_PIN); delay(2); }
+  float v = sum / 32.0;
+  if (v < 1) return;  // avoid divide-by-zero if the pin is floating
+
+  float r  = R_FIXED * (VCC_MV - v) / v;                         // thermistor resistance
+  float tK = 1.0 / (1.0 / T_REF_K + log(r / R_NOMINAL) / BETA);  // Beta equation
+  SerialBT.println(tK - 273.15,5);
+  delay(1000);
+}
